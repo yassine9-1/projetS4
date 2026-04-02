@@ -22,58 +22,72 @@
 
   <!-- Game Screen -->
   <div v-if="screen === 'game'" id="game-ui">
-    <button
-      v-if="showUnoBtn"
-      @click="sayUno"
-      style="position:fixed;top:20px;right:20px;padding:15px 25px;color:white;font-weight:bold;font-size:1.5rem;border-radius:10px;border:3px solid white;z-index:50;"
-      :style="{ background: unoBtnColor, boxShadow: '0 0 15px ' + unoBtnColor }">
-      UNO !
-    </button>
+    <div class="sidebar">
+      <div class="header" :style="{ color: teamColor, textShadow: '0 0 10px ' + teamColor }">
+        {{ username }}
+      </div>
 
-    <div class="header" :style="{ color: teamColor, textShadow: '0 0 10px ' + teamColor }">
-      {{ username }}
+      <button
+        v-if="showUnoBtn"
+        @click="sayUno"
+        class="uno-btn-compact"
+        :style="{ background: unoBtnColor, boxShadow: '0 0 15px ' + unoBtnColor }">
+        UNO !
+      </button>
+
+      <div id="debug-log">
+        {{ debugMsg }}
+      </div>
+
+      <button
+        v-if="showMotionBtn"
+        @click="requestMotionPermission"
+        class="motion-btn-compact">
+        Capteurs
+      </button>
+
+      <div class="hint"><b>SWIPE UP</b> ou <b>LANCER</b> pour jouer.<br /><b>SECOUER</b> pour piocher.</div>
     </div>
-
-    <div id="debug-log" style="font-size:0.8rem;color:#aaa;padding:5px;height:60px;overflow-y:auto;">
-      {{ debugMsg }}
-    </div>
-
-    <button
-      v-if="showMotionBtn"
-      @click="requestMotionPermission"
-      style="display:block;margin:10px auto;font-size:1rem;padding:10px;background:#3498DB;">
-      Activer Capteurs Mouvement
-    </button>
 
     <div class="hand-container" ref="handContainer">
       <!-- Draw card -->
       <div
         class="my-card"
         data-action="draw"
-        style="background-color:#555;font-size:2rem;"
-        @touchstart.prevent="onTouchStart"
-        @touchend.prevent="(e) => onTouchEnd(e, null, 'draw')"
+        :class="{ 'playing-out': playingOutId === 'draw' }"
+        :style="{ 
+          backgroundColor: '#555', 
+          fontSize: '2rem',
+          transform: playingOutId === 'draw' ? 'none' : (focusedCardId === 'draw' ? 'scale(1.05)' : 'scale(0.9)')
+        }"
+        @touchstart="onTouchStart"
+        @touchend="(e) => onTouchEnd(e, null, 'draw')"
+        @click="(e) => selectCard(e, 'draw')"
       >PIOCHER</div>
 
       <!-- Hand cards -->
       <div
         v-for="card in currentHand"
         :key="card.id"
+        :data-id="card.id"
         class="my-card"
-        :style="{ backgroundColor: colorMap[card.color] }"
-        @touchstart.prevent="onTouchStart"
-        @touchend.prevent="(e) => onTouchEnd(e, card.id, 'play')"
+        :class="{ 'playing-out': playingOutId === card.id }"
+        :style="{
+          backgroundColor: colorMap[card.color],
+          transform: playingOutId === card.id ? 'none' : (focusedCardId === card.id ? 'scale(1.05)' : 'scale(0.9)')
+        }"
+        @touchstart="onTouchStart"
+        @touchend="(e) => onTouchEnd(e, card.id, 'play')"
+        @click="(e) => selectCard(e, card.id)"
       >{{ card.value.toUpperCase() }}</div>
     </div>
-
-    <div class="hint">Glissez vers le haut (Swipe) <b>OU</b> faites le geste de lancer pour jouer !<br />Secouez pour piocher.</div>
 
     <!-- Attack / Freeze overlays (appended dynamically) -->
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import socket from '../socket.js'
 
 const screen = ref('login')  // 'login' | 'game' | 'gameover'
@@ -98,7 +112,7 @@ let virusInterval = null
 let touchStartY = 0
 
 // Selected card tracking via IntersectionObserver
-let selectedCardElement = null
+const playingOutId = ref(null) // ID of card being animated away
 let observer = null
 
 const colorMap = {
@@ -109,6 +123,7 @@ const colorMap = {
   black: '#333'
 }
 
+const focusedCardId = ref(null) // ID of card (could be 'draw' or actual ID)
 const teamColor = computed(() => myTeam.value === 'blue' ? '#3498DB' : '#F572F7')
 
 function joinGame() {
@@ -126,26 +141,29 @@ function sayUno() {
   if (navigator.vibrate) navigator.vibrate(50)
 }
 
+function selectCard(e, id) {
+  focusedCardId.value = id
+  if (e.currentTarget) {
+    e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }
+}
+
 // Touch handling
 function onTouchStart(e) {
   touchStartY = e.changedTouches[0].screenY
 }
 
 function onTouchEnd(e, cardId, action) {
-  if (isFrozen.value) return
+  if (isFrozen.value || playingOutId.value) return
   const touchEndY = e.changedTouches[0].screenY
   if (touchStartY - touchEndY > 50) {
-    const cardEl = e.currentTarget
-    cardEl.style.transform = 'translateY(-500px) scale(0.5)'
-    cardEl.style.opacity = '0'
     if (navigator.vibrate) navigator.vibrate([50, 30, 50])
+    playingOutId.value = action === 'draw' ? 'draw' : cardId
 
     if (action === 'draw') {
       socket.emit('draw_card')
-      setTimeout(() => {
-        cardEl.style.transform = 'scale(1.05)'
-        cardEl.style.opacity = '1'
-      }, 100)
+      // For draw, the card doesn't leave the hand, so reset its visual after timeout
+      setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
     } else if (cardId) {
       socket.emit('play_card', cardId)
     }
@@ -205,9 +223,12 @@ function handleMotion(event) {
   const x = event.acceleration.x || 0
 
   if (y > 15 || z > 15) {
-    if (now - lastTime > 1000 && selectedCardElement) {
+    if (now - lastTime > 1000 && focusedCardId.value) {
       lastTime = now
-      triggerAction(selectedCardElement)
+      const el = focusedCardId.value === 'draw' 
+        ? document.querySelector('[data-action="draw"]')
+        : document.querySelector(`[data-id="${focusedCardId.value}"]`)
+      if (el) triggerAction(el)
     }
   }
 
@@ -237,20 +258,17 @@ function handleMotion(event) {
   lastY = y
 }
 
-function triggerAction(cardEl) {
-  if (isFrozen.value) return
-  cardEl.style.transform = 'translateY(-500px) scale(0.5)'
-  cardEl.style.opacity = '0'
+function triggerAction(el) {
+  if (isFrozen.value || playingOutId.value) return
   if (navigator.vibrate) navigator.vibrate([50, 30, 50])
-
-  if (cardEl.dataset.action === 'draw') {
+  
+  if (el.dataset.action === 'draw') {
+    playingOutId.value = 'draw'
     socket.emit('draw_card')
-    setTimeout(() => {
-      cardEl.style.transform = 'scale(1.05)'
-      cardEl.style.opacity = '1'
-    }, 100)
-  } else if (cardEl.dataset.id) {
-    socket.emit('play_card', cardEl.dataset.id)
+    setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
+  } else if (el.dataset.id) {
+    playingOutId.value = el.dataset.id
+    socket.emit('play_card', el.dataset.id)
   }
 }
 
@@ -259,15 +277,17 @@ function setupObserver() {
   observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        selectedCardElement = entry.target
-        document.querySelectorAll('.my-card').forEach(c => c.style.transform = 'scale(0.9)')
-        selectedCardElement.style.transform = 'scale(1.05)'
+        if (entry.target.dataset.action === 'draw') {
+          focusedCardId.value = 'draw'
+        } else {
+          focusedCardId.value = entry.target.dataset.id
+        }
         if (navigator.vibrate) navigator.vibrate(10)
       }
     })
   }, { root: handContainer.value, threshold: 0.6 })
 
-  document.querySelectorAll('.my-card').forEach(c => observer.observe(c))
+  handContainer.value.querySelectorAll('.my-card').forEach(c => observer.observe(c))
 }
 
 // Socket events
@@ -281,16 +301,20 @@ socket.on('your_hand', (hand) => {
   currentHand.value = hand
   showUnoBtn.value = hand.length <= 2 && hand.length > 0
   unoBtnColor.value = '#E74C3C'
+  playingOutId.value = null // Clear animation state
 
   // Re-setup observer after hand update
-  setTimeout(() => setupObserver(), 100)
+  nextTick(() => {
+    setupObserver()
+  })
 })
 
 socket.on('card_played_rejected', () => {
+  playingOutId.value = null // Fix: Reset animation if rejected
   if (navigator.vibrate) navigator.vibrate([100, 50, 100])
   if (handContainer.value) {
     handContainer.value.style.borderColor = 'red'
-    setTimeout(() => { handContainer.value.style.borderColor = 'transparent' }, 500)
+    setTimeout(() => { if (handContainer.value) handContainer.value.style.borderColor = 'transparent' }, 500)
   }
 })
 
@@ -369,12 +393,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-body {
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
 
 .screen {
   display: none;
@@ -386,6 +404,98 @@ body {
 
 .active {
   display: flex;
+}
+
+/* Base Styles (Portrait) */
+#game-ui {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar {
+  padding: 10px;
+}
+
+.uno-btn-compact {
+  padding: 10px 20px;
+  color: white;
+  font-weight: bold;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  border: 2px solid white;
+  margin: 10px auto;
+  display: block;
+}
+
+#debug-log {
+  font-size: 0.7rem;
+  color: #aaa;
+  padding: 5px;
+  height: 40px;
+  overflow-y: auto;
+}
+
+.motion-btn-compact {
+  display: block;
+  margin: 5px auto;
+  font-size: 0.9rem;
+  padding: 8px;
+  background: #3498DB;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+
+.hint {
+  padding: 10px;
+  color: #ccc;
+  opacity: 0.8;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* Landscape Overrides */
+@media (orientation: landscape) {
+  #game-ui {
+    flex-direction: row;
+  }
+
+  .sidebar {
+    width: 25%;
+    height: 100%;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .hand-container {
+    padding: 0 50px;
+  }
+
+  .my-card {
+    height: 180px;
+    width: 120px;
+    font-size: 2.2rem;
+  }
+
+  .uno-btn-compact {
+    font-size: 1rem;
+    padding: 8px 15px;
+  }
+
+  #debug-log {
+    display: none; /* Hide debug in landscape to save space */
+  }
+
+  .hint {
+    font-size: 0.7rem;
+  }
 }
 
 input {
@@ -416,17 +526,9 @@ button {
   max-width: 300px;
 }
 
-#game-ui {
-  width: 100%;
-  height: 100vh;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
 .header {
-  padding: 20px;
-  font-size: 1.5rem;
+  padding: 15px 10px;
+  font-size: 1.3rem;
   color: #72EFF9;
   text-shadow: 0 0 10px #72EFF9;
 }
@@ -462,18 +564,8 @@ button {
   font-size: 3.5rem;
   font-weight: bold;
   box-shadow: 0 0 15px #000;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: transform 0.2s, opacity 0.2s, width 0.3s, height 0.3s;
   user-select: none;
   scroll-snap-align: center;
-}
-
-.hint {
-  position: absolute;
-  bottom: 30px;
-  width: 100%;
-  color: #ccc;
-  opacity: 0.8;
-  pointer-events: none;
-  text-align: center;
 }
 </style>
