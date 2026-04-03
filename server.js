@@ -139,8 +139,8 @@ function resolveVirus() {
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the 'dist' directory (built Vue app)
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Create an endpoint to get the server's local IP address and generate QR code
 app.get('/api/server-info', async (req, res) => {
@@ -156,8 +156,12 @@ app.get('/api/server-info', async (req, res) => {
         }
     }
 
-    // Utilisation d'un certificat HTTPS auto-signé et de l'IP locale pour un lien fixe
-    const playerUrl = `https://${localIp}:${PORT}/player.html`;
+    // NOUVEAU : En mode dev, on pointe vers le serveur Vite (5173)
+    const isDev = process.env.NODE_ENV !== 'production';
+    const playerPort = isDev ? 5173 : PORT;
+    const protocol = 'https';
+    const playerUrl = `${protocol}://${localIp}:${playerPort}/player`;
+    
     try {
         const qrCodeDataUrl = await qrcode.toDataURL(playerUrl, {
             color: { dark: '#0b0f19', light: '#72EFF9' }
@@ -351,6 +355,11 @@ io.on('connection', (socket) => {
         // Notify the main screen to remove the player's avatar
         socket.broadcast.emit('player_left', socket.id);
     });
+});
+
+// SPA fallback: serve index.html for all non-API, non-socket routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 server.listen(PORT, () => {
