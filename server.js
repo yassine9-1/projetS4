@@ -61,6 +61,9 @@ function initGame() {
         }
     } while (!gameState.currentCard);
 
+    // Initial check for deck length just in case
+    refillDeckIfNeeded();
+
     // Reset Game State
     gameState.scores = { blue: 50, magenta: 50 };
     gameState.isVirus = false;
@@ -74,6 +77,16 @@ function initGame() {
     }
     gameState.isStarted = true;
     scheduleVirus();
+}
+
+function refillDeckIfNeeded() {
+    // Si la pioche a moins de 10 cartes, on rajoute un paquet complet mélangé par-dessus !
+    if (gameState.deck.length < 10) {
+        console.log("[SERVER] Pioche presque vide. Génération d'un nouveau set de cartes...");
+        let newCards = createDeck();
+        gameState.deck = gameState.deck.concat(newCards);
+        io.emit('deck_refilled'); // Optionnel, pour un petit feedback visuel
+    }
 }
 
 function scheduleVirus() {
@@ -110,6 +123,7 @@ function resolveVirus() {
         let player = gameState.players[playerId];
         if (!player.cured) {
             // Penalize
+            refillDeckIfNeeded();
             if (gameState.deck.length >= 2) {
                 player.hand.push(gameState.deck.pop(), gameState.deck.pop());
                 infectedPlayers.push(player.username);
@@ -125,8 +139,8 @@ function resolveVirus() {
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the 'dist' directory (built Vue app)
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Create an endpoint to get the server's local IP address and generate QR code
 app.get('/api/server-info', async (req, res) => {
@@ -142,8 +156,12 @@ app.get('/api/server-info', async (req, res) => {
         }
     }
 
-    // Utilisation d'un certificat HTTPS auto-signé et de l'IP locale pour un lien fixe
-    const playerUrl = `https://${localIp}:${PORT}/player.html`;
+    // NOUVEAU : En mode dev, on pointe vers le serveur Vite (5173)
+    const isDev = process.env.NODE_ENV !== 'production';
+    const playerPort = isDev ? 5173 : PORT;
+    const protocol = 'https';
+    const playerUrl = `${protocol}://${localIp}:${playerPort}/player`;
+    
     try {
         const qrCodeDataUrl = await qrcode.toDataURL(playerUrl, {
             color: { dark: '#0b0f19', light: '#72EFF9' }
@@ -233,11 +251,46 @@ io.on('connection', (socket) => {
                 gameState.scores.blue -= 2;
             }
 
+            // Vérification de victoire par JAUGE d'Équipe !
+            if (gameState.scores.blue >= 100 || gameState.scores.magenta >= 100) {
+                 let winningTeam = gameState.scores.blue >= 100 ? 'blue' : 'magenta';
+                 let winMsg = `L'ÉQUIPE ${winningTeam === 'blue' ? 'NÉON BLEU' : 'NÉON ROSE'}`;
+                 io.emit('game_over', { winner: winMsg, team: winningTeam });
+                 gameState.isStarted = false;
+                 if (gameState.virusTimeout) clearTimeout(gameState.virusTimeout);
+                 return; // On arrête là
+            }
+
+            // ---- EFFETS DES CARTES SPÉCIALES ----
+            refillDeckIfNeeded();
+            let opposingTeam = player.team === 'blue' ? 'magenta' : 'blue';
+            let opposingPlayers = Object.values(gameState.players).filter(p => p.team === opposingTeam);
+
+            if (cardToPlay.value === 'draw2' || cardToPlay.value === 'wild_draw4') {
+                // Trouver une cible au hasard dans l'équipe adverse
+                if (opposingPlayers.length > 0) {
+                    let target = opposingPlayers[Math.floor(Math.random() * opposingPlayers.length)];
+                    let cardsToDraw = cardToPlay.value === 'draw2' ? 2 : 4;
+                    for (let i = 0; i < cardsToDraw; i++) {
+                        target.hand.push(gameState.deck.pop());
+                    }
+                    io.to(target.id).emit('your_hand', target.hand);
+                    // On peut notifier la cible qu'elle s'est fait attaquer par 'player.username'
+                    io.to(target.id).emit('attacked', { by: player.username, cards: cardsToDraw });
+                }
+            } else if (cardToPlay.value === 'skip' || cardToPlay.value === 'reverse') {
+                // Gèle toute l'équipe adverse pendant 2 secondes !
+                opposingPlayers.forEach(p => {
+                    io.to(p.id).emit('freeze_team', { by: player.username });
+                });
+            }
+
             // UNO Logic Penalties
             let unoOupli = false;
             // Si le joueur n'a plus qu'une carte et n'a pas appuyé sur UNO...
             if (player.hand.length === 1 && !player.saidUno) {
                 unoOupli = true;
+                refillDeckIfNeeded();
                 if (gameState.deck.length >= 2) {
                     player.hand.push(gameState.deck.pop(), gameState.deck.pop()); // pénalité +2
                 }
@@ -288,6 +341,7 @@ io.on('connection', (socket) => {
         if (!player) return;
 
         if (gameState.deck.length > 0) {
+            refillDeckIfNeeded();
             const newCard = gameState.deck.pop();
             player.hand.push(newCard);
             player.saidUno = false; // Reset UNO status when drawing
@@ -301,6 +355,11 @@ io.on('connection', (socket) => {
         // Notify the main screen to remove the player's avatar
         socket.broadcast.emit('player_left', socket.id);
     });
+});
+
+// SPA fallback: serve index.html for all non-API, non-socket routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 server.listen(PORT, () => {
