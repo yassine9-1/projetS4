@@ -47,7 +47,13 @@ function createDeck() {
         deck.push({ color: 'black', value: 'wild', id: `black-wild-${i}` });
         deck.push({ color: 'black', value: 'wild_draw4', id: `black-wild_draw4-${i}` });
     }
-    return deck.sort(() => Math.random() - 0.5); // Shuffle
+    
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    
+    return deck;
 }
 
 function initGame() {
@@ -216,12 +222,16 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle play card attempt (Fastest wins)
-    socket.on('play_card', (cardId) => {
+// Handle play card attempt (Fastest wins)
+    socket.on('play_card', (data) => {
         if (!gameState.isStarted || gameState.isVirus) return; // Cannot play during virus
 
         const player = gameState.players[socket.id];
         if (!player) return;
+
+        // Gestion de la rétrocompatibilité ou du nouveau format d'envoi
+        let cardId = typeof data === 'object' ? data.cardId : data;
+        let chosenColor = typeof data === 'object' ? data.chosenColor : null;
 
         const cardIndex = player.hand.findIndex(c => c.id === cardId);
         if (cardIndex === -1) return; // Cheating or out of sync
@@ -239,8 +249,17 @@ io.on('connection', (socket) => {
             // Remove from hand
             player.hand.splice(cardIndex, 1);
 
-            // Update center card
-            gameState.currentCard = cardToPlay;
+            // Update center card : LOGIQUE CORRIGÉE POUR LES CARTES NOIRES
+            if (cardToPlay.color === 'black') {
+                // Si la couleur choisie est valide, on l'applique. Sinon, on force 'red' par défaut.
+                const validColors = ['red', 'blue', 'green', 'yellow'];
+                const newColor = validColors.includes(chosenColor) ? chosenColor : 'red';
+                
+                // On clone la carte et on change sa couleur pour que le prochain joueur doive suivre cette couleur
+                gameState.currentCard = { ...cardToPlay, color: newColor };
+            } else {
+                gameState.currentCard = cardToPlay;
+            }
 
             // Jauge Logic
             if (player.team === 'blue') {
@@ -307,7 +326,8 @@ io.on('connection', (socket) => {
             io.emit('card_played_success', {
                 playerId: socket.id,
                 username: player.username,
-                card: cardToPlay,
+                // On envoie la carte mise à jour (avec sa nouvelle couleur si c'était une carte noire)
+                card: gameState.currentCard, 
                 scores: gameState.scores,
                 unoOupli: unoOupli
             });
