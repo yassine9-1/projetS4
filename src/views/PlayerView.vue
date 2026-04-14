@@ -83,7 +83,17 @@
     </div>
 
     <!-- Attack / Freeze overlays (appended dynamically) -->
-  </div>
+    <div v-if="showColorPicker" class="color-picker-overlay">
+      <h2 style="color:white; text-shadow:0 0 10px white;">Choisissez la couleur</h2>
+      <div class="color-buttons">
+        <div class="color-btn" style="background:#E74C3C" @click="confirmBlackCard('red')"></div>
+        <div class="color-btn" style="background:#3498DB" @click="confirmBlackCard('blue')"></div>
+        <div class="color-btn" style="background:#2ECC71" @click="confirmBlackCard('green')"></div>
+        <div class="color-btn" style="background:#F1C40F" @click="confirmBlackCard('yellow')"></div>
+      </div>
+    </div>
+
+  </div> 
 </template>
 
 <script setup>
@@ -98,6 +108,8 @@ const currentHand = ref([])
 const isVirus = ref(false)
 const isFrozen = ref(false)
 const handContainer = ref(null)
+const showColorPicker = ref(false)
+const pendingBlackCardId = ref(null)
 
 const showUnoBtn = ref(false)
 const unoBtnColor = ref('#E74C3C')
@@ -165,7 +177,7 @@ function onTouchEnd(e, cardId, action) {
       // For draw, the card doesn't leave the hand, so reset its visual after timeout
       setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
     } else if (cardId) {
-      socket.emit('play_card', cardId)
+      attemptPlayCard(cardId)
     }
   }
 }
@@ -268,7 +280,7 @@ function triggerAction(el) {
     setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
   } else if (el.dataset.id) {
     playingOutId.value = el.dataset.id
-    socket.emit('play_card', el.dataset.id)
+    attemptPlayCard(el.dataset.id)
   }
 }
 
@@ -288,6 +300,29 @@ function setupObserver() {
   }, { root: handContainer.value, threshold: 0.6 })
 
   handContainer.value.querySelectorAll('.my-card').forEach(c => observer.observe(c))
+}
+
+function attemptPlayCard(cardId) {
+  const card = currentHand.value.find(c => c.id === cardId)
+  if (card && card.color === 'black') {
+    // Si c'est une carte noire, on ouvre le sélecteur de couleur
+    pendingBlackCardId.value = cardId
+    showColorPicker.value = true
+  } else {
+    // Sinon on l'envoie normalement
+    socket.emit('play_card', { cardId: cardId })
+  }
+}
+
+function confirmBlackCard(color) {
+  if (pendingBlackCardId.value) {
+    socket.emit('play_card', { 
+      cardId: pendingBlackCardId.value, 
+      chosenColor: color 
+    })
+    showColorPicker.value = false
+    pendingBlackCardId.value = null
+  }
 }
 
 // Socket events
@@ -567,5 +602,30 @@ button {
   transition: transform 0.2s, opacity 0.2s, width 0.3s, height 0.3s;
   user-select: none;
   scroll-snap-align: center;
+}
+
+.color-picker-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.color-buttons {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.color-btn {
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 0 15px rgba(255,255,255,0.5);
+  cursor: pointer;
 }
 </style>
