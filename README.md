@@ -164,7 +164,7 @@ npm run build
 npm start
 ```
 
-Le jeu est accessible sur **`https://localhost:3000`**. L'IP réseau locale est affichée dans la console pour permettre aux autres appareils de se connecter via le QR Code.
+Le jeu est accessible sur **`https://localhost:3000`**. L'IP réseau locale est intégrée dans le QR Code affiché à l'écran projecteur, permettant aux autres appareils de se connecter directement.
 
 ---
 
