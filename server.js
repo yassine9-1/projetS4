@@ -563,9 +563,9 @@ function processPlayCard(playerId, cardId, chosenColor) {
         }
     }
 
-    let unoOupli = false;
+    let unoOubli = false;
     if (player.hand.length === 1 && !player.saidUno) {
-        unoOupli = true;
+        unoOubli = true;
         refillDeckIfNeeded();
         if (gameState.deck.length >= 2) {
             player.hand.push(gameState.deck.pop(), gameState.deck.pop());
@@ -581,7 +581,7 @@ function processPlayCard(playerId, cardId, chosenColor) {
         scores: gameState.scores,
         scoreGained: finalScore.toFixed(1),
         timeMultiplier: timeMult.toFixed(2),
-        unoOupli: unoOupli
+        unoOubli: unoOubli
     });
 
     // Send updated hand to human players

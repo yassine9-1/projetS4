@@ -597,8 +597,8 @@ socket.on('card_played_success', (data) => {
   const p = positionedPlayers.value.find(pl => pl.username === data.username)
   const teamColor = p ? (p.team === 'blue' ? '#72EFF9' : '#F572F7') : null
 
-  if (data.unoOupli) {
-    showFeedback(`OBLI DE UNO ! +2 pour ${data.username}`, '#E74C3C', data.scoreGained, p)
+  if (data.unoOubli) {
+    showFeedback(`OUBLI DE UNO ! +2 pour ${data.username}`, '#E74C3C', data.scoreGained, p)
   } else {
     showFeedback(`${data.username} a joué !`, teamColor, data.scoreGained, p)
   }
