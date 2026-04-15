@@ -4,8 +4,8 @@
   "description": "Jeu Uno multijoueur massif colocalisé",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev:server": "node --watch server.js",
+    "start": "node server.js prod",
+    "dev:server": "node --watch server.js dev",
     "dev:client": "vite",
     "build": "vite build",
     "preview": "vite preview"

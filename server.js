@@ -47,12 +47,12 @@ function createDeck() {
         deck.push({ color: 'black', value: 'wild', id: `black-wild-${i}` });
         deck.push({ color: 'black', value: 'wild_draw4', id: `black-wild_draw4-${i}` });
     }
-    
+
     for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];
     }
-    
+
     return deck;
 }
 
@@ -86,7 +86,7 @@ function initGame() {
 }
 
 function refillDeckIfNeeded() {
-    // Si la pioche a moins de 10 cartes, on rajoute un paquet complet mélangé par-dessus !
+    // Si la pioche a moins de 10 cartes, on rajoute un paquet complet mélangé par-dessus
     if (gameState.deck.length < 10) {
         console.log("[SERVER] Pioche presque vide. Génération d'un nouveau set de cartes...");
         let newCards = createDeck();
@@ -162,12 +162,12 @@ app.get('/api/server-info', async (req, res) => {
         }
     }
 
-    // NOUVEAU : En mode dev, on pointe vers le serveur Vite (5173)
-    const isDev = process.env.NODE_ENV !== 'production';
+    // Mode Dev = vrai par défaut, Sauf si on a lancé le script avec l'argument 'prod'
+    const isDev = !process.argv.includes('prod');
     const playerPort = isDev ? 5173 : PORT;
     const protocol = 'https';
     const playerUrl = `${protocol}://${localIp}:${playerPort}/player`;
-    
+
     try {
         const qrCodeDataUrl = await qrcode.toDataURL(playerUrl, {
             color: { dark: '#0b0f19', light: '#72EFF9' }
@@ -259,7 +259,7 @@ io.on('connection', (socket) => {
 
         // Validation Rule: match color, match value, wild card, OR if current card is black (acts as a reset for the next immediate card)
         const isValid =
-            current.color === 'black' || 
+            current.color === 'black' ||
             cardToPlay.color === current.color ||
             cardToPlay.value === current.value ||
             cardToPlay.color === 'black';
@@ -273,7 +273,7 @@ io.on('connection', (socket) => {
                 // Si la couleur choisie est valide, on l'applique. Sinon, on force 'red' par défaut.
                 const validColors = ['red', 'blue', 'green', 'yellow'];
                 const newColor = validColors.includes(chosenColor) ? chosenColor : 'red';
-                
+
                 // On clone la carte et on change sa couleur pour que le prochain joueur doive suivre cette couleur
                 gameState.currentCard = { ...cardToPlay, color: newColor };
             } else {
@@ -291,12 +291,12 @@ io.on('connection', (socket) => {
 
             // Vérification de victoire par JAUGE d'Équipe !
             if (gameState.scores.blue >= 100 || gameState.scores.magenta >= 100) {
-                 let winningTeam = gameState.scores.blue >= 100 ? 'blue' : 'magenta';
-                 let winMsg = `L'ÉQUIPE ${winningTeam === 'blue' ? 'NÉON BLEU' : 'NÉON ROSE'}`;
-                 io.emit('game_over', { winner: winMsg, team: winningTeam });
-                 gameState.isStarted = false;
-                 if (gameState.virusTimeout) clearTimeout(gameState.virusTimeout);
-                 return; // On arrête là
+                let winningTeam = gameState.scores.blue >= 100 ? 'blue' : 'magenta';
+                let winMsg = `L'ÉQUIPE ${winningTeam === 'blue' ? 'NÉON BLEU' : 'NÉON ROSE'}`;
+                io.emit('game_over', { winner: winMsg, team: winningTeam });
+                gameState.isStarted = false;
+                if (gameState.virusTimeout) clearTimeout(gameState.virusTimeout);
+                return; // On arrête là
             }
 
             // ---- EFFETS DES CARTES SPÉCIALES ----
@@ -317,7 +317,7 @@ io.on('connection', (socket) => {
                     io.to(target.id).emit('attacked', { by: player.username, cards: cardsToDraw });
                 }
             } else if (cardToPlay.value === 'skip' || cardToPlay.value === 'reverse') {
-                // Gèle toute l'équipe adverse pendant 2 secondes !
+                // Gèle toute l'équipe adverse pendant 2 secondes
                 opposingPlayers.forEach(p => {
                     io.to(p.id).emit('freeze_team', { by: player.username });
                 });
@@ -333,7 +333,7 @@ io.on('connection', (socket) => {
                     player.hand.push(gameState.deck.pop(), gameState.deck.pop()); // pénalité +2
                 }
             } else if (player.hand.length === 0) {
-                // GAGNANT !
+                // GAGNANT
                 io.emit('game_over', { winner: player.username, team: player.team });
                 gameState.isStarted = false;
                 if (gameState.virusTimeout) clearTimeout(gameState.virusTimeout);
@@ -346,7 +346,7 @@ io.on('connection', (socket) => {
                 playerId: socket.id,
                 username: player.username,
                 // On envoie la carte mise à jour (avec sa nouvelle couleur si c'était une carte noire)
-                card: gameState.currentCard, 
+                card: gameState.currentCard,
                 scores: gameState.scores,
                 unoOupli: unoOupli
             });
@@ -402,5 +402,9 @@ app.get('*', (req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`[SERVER] NEON-UNO running on http://localhost:${PORT}`);
+    const isDev = !process.argv.includes('prod');
+    console.log(`[SERVER] API & Socket Backend running on https://localhost:${PORT}`);
+    if (isDev) {
+        console.log(`[INFO] (Mode Dev) L'interface Web est accessible via Vite : https://localhost:5173`);
+    }
 });
