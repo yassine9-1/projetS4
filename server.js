@@ -163,6 +163,12 @@ function colorVarietyMultiplier(hand) {
     return map[uniqueColors] || 0.3;
 }
 
+function sameColorStreakMultiplier(count) {
+    if (count <= 1) return 1.2; // 奖励换色或开始第一张
+    // count=2时为1.0, count=5时约为0.5, 趋近于0.35
+    return 0.35 + 0.65 * Math.exp(-(count - 2) / 2.0);
+}
+
 // --- AI PLAY LOGIC ---
 
 function findValidCards(hand, currentCard) {
@@ -336,9 +342,20 @@ function aiPlayCard(aiId) {
         resetAITimers();
     }
 
+    // Same-color streak tracking
+    if (gameState.currentCard.color === player.lastPlayedColor) {
+        player.consecutiveColorCount++;
+    } else {
+        player.lastPlayedColor = gameState.currentCard.color;
+        player.consecutiveColorCount = 1;
+    }
+
     // AI score contribution
     const baseScore = 1.0;
-    const finalScore = baseScore * handCountMultiplier(player.hand.length) * colorVarietyMultiplier(player.hand);
+    const finalScore = baseScore 
+        * handCountMultiplier(player.hand.length) 
+        * colorVarietyMultiplier(player.hand) 
+        * sameColorStreakMultiplier(player.consecutiveColorCount);
     
     if (player.team === 'blue') {
         gameState.scores.blue += finalScore;
@@ -581,7 +598,9 @@ io.on('connection', (socket) => {
             hand: [],
             team: team,
             saidUno: false,
-            cured: false
+            cured: false,
+            lastPlayedColor: null,
+            consecutiveColorCount: 0
         };
 
         // Notify the main screen (projector)
@@ -640,7 +659,9 @@ io.on('connection', (socket) => {
             saidUno: false,
             cured: false,
             isAI: true,
-            aiPersonality: personality
+            aiPersonality: personality,
+            lastPlayedColor: null,
+            consecutiveColorCount: 0
         };
 
         console.log(`[AI] ${aiName} added (${personality}) to team ${team}`);
@@ -724,9 +745,20 @@ io.on('connection', (socket) => {
                 resetAITimers();
             }
 
+            // Same-color streak tracking
+            if (gameState.currentCard.color === player.lastPlayedColor) {
+                player.consecutiveColorCount++;
+            } else {
+                player.lastPlayedColor = gameState.currentCard.color;
+                player.consecutiveColorCount = 1;
+            }
+
             // Jauge Logic
             const baseScore = 2.0;
-            const finalScore = baseScore * handCountMultiplier(player.hand.length) * colorVarietyMultiplier(player.hand);
+            const finalScore = baseScore 
+                * handCountMultiplier(player.hand.length) 
+                * colorVarietyMultiplier(player.hand) 
+                * sameColorStreakMultiplier(player.consecutiveColorCount);
 
             if (player.team === 'blue') {
                 gameState.scores.blue += finalScore;
