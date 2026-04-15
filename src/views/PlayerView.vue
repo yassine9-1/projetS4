@@ -60,8 +60,24 @@
       </button>
 
       <div class="hint">
-        <span v-if="currentHand.length > 0"><b>SWIPE UP</b> ou <b>LANCER</b> pour jouer.</span>
-        <span v-else style="color:#F1C40F;font-weight:bold;animation:pulse 0.5s infinite alternate;">⚠️ L'ÉCRAN EST VIDE ! <br/>SWIPE UP sur la pile de gauche pour piocher !</span>
+        <!-- Message principal (Urgent : Vide ou <3 cartes) -->
+        <div v-if="currentHand.length === 0" style="color:#F1C40F;font-weight:bold;animation:pulse 0.5s infinite alternate;font-size:1.1rem;">
+          ⚠️ L'ÉCRAN EST VIDE ! <br/>SWIPE UP sur la pile de gauche pour piocher !
+        </div>
+        <div v-else-if="currentHand.length <= 3" style="color:#F39C12;font-weight:bold;">
+          ⚠️ DERNIÈRES CARTES ! <br/>SWIPE UP à gauche si besoin de piocher.
+          <div v-if="uniqueColorCount === 1" style="color:#72EFF9;font-size:0.9rem;">🔥 BONUS SCORE x1.8 ACTIF</div>
+        </div>
+        
+        <!-- Message secondaire (Bonus de couleur) -->
+        <div v-else-if="uniqueColorCount === 1" style="color:#72EFF9;font-weight:bold;animation:pulse 2s infinite alternate;">
+          🔥 ZONE DE SCORE MAX ! <br/>Une seule couleur : Score x1.8 !
+        </div>
+        
+        <!-- Instructions par défaut -->
+        <div v-else>
+          <b>SWIPE UP</b> ou <b>LANCER</b> pour jouer.
+        </div>
         <br /><b>SECOUER</b> pour piocher.
       </div>
     </div>
@@ -135,6 +151,10 @@ const sortedHand = computed(() => {
   return [...currentHand.value].sort((a, b) => {
     return colorOrder.indexOf(a.color) - colorOrder.indexOf(b.color)
   })
+})
+
+const uniqueColorCount = computed(() => {
+  return new Set(currentHand.value.map(c => c.color)).size
 })
 
 const isVirus = ref(false)
@@ -240,18 +260,18 @@ function onTouchStart(e) {
 }
 
 function onTouchEnd(e, cardId, action) {
-  if (isFrozen.value || playingOutId.value) return
   const touchEndY = e.changedTouches[0].screenY
   if (touchStartY - touchEndY > 50) {
     if (navigator.vibrate) navigator.vibrate([50, 30, 50])
-    playingOutId.value = action === 'draw' ? 'draw' : cardId
-
+    
     if (action === 'draw') {
-      socket.emit('draw_card')
-      // For draw, the card doesn't leave the hand, so reset its visual after timeout
-      setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
+      executeDraw()
     } else if (cardId) {
-      attemptPlayCard(cardId)
+      // For playing, we set the animation ID here to provide immediate feedback
+      if (!isFrozen.value && !isVirus.value && !playingOutId.value) {
+        playingOutId.value = cardId
+        attemptPlayCard(cardId)
+      }
     }
   }
 }
@@ -308,19 +328,27 @@ function handleMotion(event) {
   const y = event.acceleration.y || 0
   const x = event.acceleration.x || 0
 
+  // 1. Throwing movement (Y or Z axis)
   if (y > 15 || z > 15) {
     if (now - lastTime > 1000 && focusedCardId.value) {
       lastTime = now
-      const el = focusedCardId.value === 'draw' 
-        ? document.querySelector('[data-action="draw"]')
-        : document.querySelector(`[data-id="${focusedCardId.value}"]`)
-      if (el) triggerAction(el)
+      if (focusedCardId.value === 'draw') {
+        executeDraw()
+      } else {
+        // Find existing card and play it
+        const cardId = focusedCardId.value
+        if (cardId && !isFrozen.value && !isVirus.value && !playingOutId.value) {
+          playingOutId.value = cardId
+          attemptPlayCard(cardId)
+        }
+      }
     }
   }
 
   const deltaX = Math.abs(x - lastX)
   const deltaY = Math.abs(y - lastY)
 
+  // 2. Cure Virus (Shake)
   if (isVirus.value) {
     if (deltaX > 20 || deltaY > 20) {
       socket.emit('cure_virus')
@@ -334,28 +362,26 @@ function handleMotion(event) {
     return
   }
 
+  // 3. Shake to Draw
   if ((deltaX > 15 && deltaY > 15) && (now - lastShakeTime > 2000)) {
     lastShakeTime = now
     if (navigator.vibrate) navigator.vibrate([30, 30, 30])
-    socket.emit('draw_card')
+    executeDraw()
   }
 
   lastX = x
   lastY = y
 }
 
-function triggerAction(el) {
-  if (isFrozen.value || playingOutId.value) return
-  if (navigator.vibrate) navigator.vibrate([50, 30, 50])
+function executeDraw() {
+  if (isFrozen.value || isVirus.value || playingOutId.value) return
   
-  if (el.dataset.action === 'draw') {
-    playingOutId.value = 'draw'
-    socket.emit('draw_card')
-    setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
-  } else if (el.dataset.id) {
-    playingOutId.value = el.dataset.id
-    attemptPlayCard(el.dataset.id)
-  }
+  if (navigator.vibrate) navigator.vibrate([50, 30, 50])
+  playingOutId.value = 'draw'
+  socket.emit('draw_card')
+  
+  // Reset visual after timeout
+  setTimeout(() => { if (playingOutId.value === 'draw') playingOutId.value = null }, 300)
 }
 
 function handleScroll() {
@@ -388,8 +414,15 @@ function handleScroll() {
 }
 
 function attemptPlayCard(cardId) {
+  if (isFrozen.value || isVirus.value) return
+  
   const card = currentHand.value.find(c => c.id === cardId)
-  if (card && card.color === 'black') {
+  if (!card) {
+    playingOutId.value = null
+    return
+  }
+
+  if (card.color === 'black') {
     // Si c'est une carte noire, on ouvre le sélecteur de couleur
     pendingBlackCardId.value = cardId
     showColorPicker.value = true
@@ -542,15 +575,19 @@ function handleKeydown(e) {
     scrollToFocused()
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    const el = focusedCardId.value === 'draw'
-      ? document.querySelector('[data-action="draw"]')
-      : document.querySelector(`[data-id="${focusedCardId.value}"]`)
-    if (el) triggerAction(el)
+    if (focusedCardId.value === 'draw') {
+      executeDraw()
+    } else if (focusedCardId.value) {
+      if (!isFrozen.value && !isVirus.value && !playingOutId.value) {
+        playingOutId.value = focusedCardId.value
+        attemptPlayCard(focusedCardId.value)
+      }
+    }
   } else if (e.key === ' ' || e.key === 'Enter') {
     // If NOT virus, Space/Enter can also draw a card (shortcut for shake)
     if (!isVirus.value && !showColorPicker.value) {
       e.preventDefault()
-      socket.emit('draw_card')
+      executeDraw()
     }
   }
 }
