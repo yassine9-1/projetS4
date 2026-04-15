@@ -116,7 +116,7 @@ When the draw pile drops below **10 cards**, a brand new shuffled deck of 108 ca
 
 ## 🤖 AI Players
 
-The host can add up to **5 AI players** from the lobby screen (via the "🤖 添加AI" button at the bottom). Each AI gets a random name followed by `[AI]` and is randomly assigned one of three personality types. **AI players contribute +1/−1 point per card played** (compared to +2/−2 for human players).
+The host can add up to **5 AI players** from the lobby screen (via the "🤖 Add AI" button at the bottom). Each AI gets a random name followed by `[AI]` and is randomly assigned one of three personality types. **AI players contribute +1/−1 point per card played** (compared to +2/−2 for human players).
 
 | Personality | Speed | Interval | Algorithm | Behaviour |
 |---|---|---|---|---|

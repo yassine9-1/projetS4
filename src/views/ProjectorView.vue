@@ -40,7 +40,8 @@
             draggable="true"
             @dragstart="onDragStart($event, player.id)"
           >
-            {{ player.username }}
+            <span class="player-name-text">{{ player.username }}</span>
+            <button v-if="player.isAI" class="remove-ai-btn" @click.stop="removeAI(player.id)">❌</button>
           </div>
           <div v-if="bluePlayers.length === 0" class="empty-slot">En attente…</div>
         </div>
@@ -66,7 +67,8 @@
             draggable="true"
             @dragstart="onDragStart($event, player.id)"
           >
-            {{ player.username }}
+            <span class="player-name-text">{{ player.username }}</span>
+            <button v-if="player.isAI" class="remove-ai-btn" @click.stop="removeAI(player.id)">❌</button>
           </div>
           <div v-if="magentaPlayers.length === 0" class="empty-slot">En attente…</div>
         </div>
@@ -76,7 +78,7 @@
     <!-- Footer: Add AI + Start -->
     <div class="lobby-footer">
       <button v-if="aiCount < 5" class="add-ai-btn" @click="addAI">
-        🤖 添加AI ({{ aiCount }}/5)
+        🤖 Ajouter AI ({{ aiCount }}/5)
       </button>
       <button class="start-btn" @click="startGame">
         🚀 DÉMARRER LA BATAILLE
@@ -278,6 +280,10 @@ function startGame() {
 
 function addAI() {
   socket.emit('add_ai')
+}
+
+function removeAI(aiId) {
+  socket.emit('remove_ai', aiId)
 }
 
 function restartGame() {
@@ -661,6 +667,33 @@ onUnmounted(() => {
   user-select: none;
   text-align: center;
   transition: transform 0.15s, box-shadow 0.15s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.player-name-text {
+  flex-grow: 1;
+  text-align: center;
+}
+
+.remove-ai-btn {
+  position: absolute;
+  right: 15px;
+  background: transparent;
+  border: none;
+  color: #E74C3C;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  transition: transform 0.2s, filter 0.2s;
+}
+
+.remove-ai-btn:hover {
+  transform: scale(1.3);
+  filter: drop-shadow(0 0 5px #E74C3C);
 }
 
 .lobby-player:active {

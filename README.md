@@ -116,7 +116,7 @@ Lorsque la pioche tombe en dessous de **10 cartes**, un nouveau paquet complet d
 
 ## 🤖 Joueurs AI
 
-L'hôte peut ajouter jusqu'à **5 joueurs AI** depuis l'écran lobby (bouton « 🤖 添加AI » en bas). Chaque AI reçoit un nom aléatoire suivi de `[AI]` et une personnalité tirée au sort parmi trois types. **Les AI contribuent +1/−1 point par carte jouée** (contre +2/−2 pour les joueurs humains).
+L'hôte peut ajouter jusqu'à **5 joueurs AI** depuis l'écran lobby (bouton « 🤖 Ajouter AI » en bas). Chaque AI reçoit un nom aléatoire suivi de `[AI]` et une personnalité tirée au sort parmi trois types. **Les AI contribuent +1/−1 point par carte jouée** (contre +2/−2 pour les joueurs humains).
 
 | Personnalité | Vitesse | Intervalle | Algorithme | Comportement |
 |---|---|---|---|---|
