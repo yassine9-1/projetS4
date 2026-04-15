@@ -28,11 +28,13 @@ _Un jeu de cartes multijoueur massif et colocalisé — smartphones comme manett
 | Fonctionnalité             | Description                                                                                                                                                 |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🖥️ **Écran Géant**         | Affiche l'arène de jeu, la carte en cours, la répartition des joueurs, la jauge de score et des animations spectaculaires (lasers, explosions, particules). |
-| 📱 **Manettes Smartphone** | Les joueurs rejoignent la partie en scannant simplement le QR Code affiché à l'écran.                                                                       |
-| 🤝 **Deux Équipes**        | Attribution aléatoire des équipes. Les points remplissent une jauge commune par équipe.                                                                     |
-| 🦠 **Événement Virus**     | Un virus aléatoire gèle le jeu : secouez votre téléphone pour vous soigner, ou recevez des pénalités !                                                      |
-| 🃏 **Cartes Spéciales**    | Les effets ciblent toujours l'équipe adverse (+2/+4 adversaire aléatoire, gel d'équipe).                                                                    |
-| 📳 **Retours Haptiques**   | L'accéléromètre et les vibrations rendent le jeu encore plus immersif.                                                                                      |
+| 📱 **Manettes Smartphone** | Rejoignez en scannant le QR code. Tri auto des cartes par couleur. UI adaptative.      |
+| 🤝 **Deux Équipes**        | Attribution aléatoire. Les points utilisent des poids dynamiques pour remplir la jauge.|
+| 📡 **Persistance d'État**  | Supporte la reconnexion et le rafraîchissement : état (main, scores) préservé.         |
+| 🦠 **Événement Virus**     | Un virus aléatoire gèle le jeu : secouez votre téléphone pour vous soigner !           |
+| 🃏 **Cartes Spéciales**    | Les effets ciblent toujours l'équipe adverse (+2/+4, gel d'équipe).                   |
+| 📳 **Retours Haptiques**   | L'accéléromètre et les vibrations rendent le jeu encore plus immersif.                 |
+| 📈 **Popups de Score**     | Affichage des gains de score en temps réel à la position des joueurs sur le projecteur.|
 
 ---
 
@@ -71,12 +73,31 @@ Si aucune carte ne convient, le joueur peut **secouer son téléphone** pour pio
 
 ### 📊 Système de Score
 
-Chaque carte posée avec succès modifie la jauge d'équipe :
+NEON-UNO utilise un système de score pondéré dynamique. Chaque carte posée avec succès rapporte un **score flottant** calculé selon plusieurs facteurs :
 
-- **+2 points** pour l'équipe du joueur qui pose la carte
-- **−2 points** pour l'équipe adverse
+**`Score Final = Base (Humain 2 / AI 1) × Palier 1 (Nombre de cartes) × Palier 2 (Variété) × Palier 3 (Série)`**
 
-La **première équipe à atteindre 100 points** remporte la partie. Si un joueur vide sa main avant cela, il gagne aussi la partie individuellement.
+#### 1. Palier 1 : Multiplicateur de Cartes en Main
+Moins vous avez de cartes, plus le score est élevé (récompense du risque).
+- **1 carte** : **1.8x**
+- **5-7 cartes** : **1.0x** (Base)
+- **10+ cartes** : Décroît vers **~0.4x**, minimum **0.3x**.
+
+#### 2. Palier 2 : Multiplicateur de Variété de Couleurs
+Récompense les joueurs qui contrôlent une couleur spécifique. Inclut les 5 couleurs (Rouge, Bleu, Vert, Jaune, Noir).
+- **1 couleur** : **1.8x**
+- **2 couleurs** : **1.3x**
+- **3 couleurs** : **1.0x**
+- **4 couleurs** : **0.7x**
+- **5 couleurs** : **0.3x**
+
+#### 3. Palier 3 : Multiplicateur de Série de Couleur (Streak)
+Pénalise le jeu répétitif de la même couleur sans stratégie.
+- **Changement de couleur / 1ère carte** : **1.2x** de bonus.
+- **2ème carte consécutive de même couleur** : **1.0x**.
+- **5ème carte consécutive** : **~0.5x**, minimum asymptotique à **0.35x**.
+
+**Conditions de Victoire** : La **première équipe à atteindre 100 points** gagne. Vider sa main ne fait plus gagner immédiatement, mais donne un énorme boost de points. Les joueurs continuent de jouer après avoir vidé leur main.
 
 ### 🔮 Effets des Cartes Spéciales
 

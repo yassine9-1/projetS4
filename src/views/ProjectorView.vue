@@ -552,12 +552,34 @@ socket.on('game_over', (data) => {
   winnerColor.value = data.team === 'blue' ? '#3498DB' : data.team === 'magenta' ? '#F572F7' : '#F1C40F'
 })
 
+socket.on('sync_state', (data) => {
+  gameStarted.value = data.isStarted
+  isVirus.value = data.isVirus
+  
+  // Synchroniser la liste des joueurs
+  Object.keys(players).forEach(key => delete players[key])
+  Object.assign(players, data.players)
+
+  if (data.isStarted && data.currentCard) {
+    // Si la partie est déjà lancée, on restaure la pile de cartes et les scores
+    cardPile.value = []
+    updateCenterCard(data.currentCard)
+    blueWidth.value = data.scores.blue
+    magentaWidth.value = data.scores.magenta
+  }
+})
+
+
 onMounted(() => {
   createParticles()
   updateDeckRadius()
   resizeObserver = new ResizeObserver(updateDeckRadius)
   if (deckAreaRef.value) resizeObserver.observe(deckAreaRef.value)
+  
+  // Demander la synchronisation au serveur
+  socket.emit('request_sync')
 })
+
 
 onUnmounted(() => {
   if (particleInterval) clearInterval(particleInterval)
@@ -570,7 +592,9 @@ onUnmounted(() => {
   socket.off('virus_event')
   socket.off('virus_resolved')
   socket.off('game_over')
+  socket.off('sync_state')
 })
+
 </script>
 
 <style scoped>

@@ -583,8 +583,38 @@ app.get('/api/server-info', async (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[+] New connection: ${socket.id}`);
 
-    // Wait for player to join with a username
+    socket.on('request_sync', () => {
+        socket.emit('sync_state', {
+            isStarted: gameState.isStarted,
+            players: gameState.players,
+            currentCard: gameState.currentCard,
+            scores: gameState.scores,
+            isVirus: gameState.isVirus
+        });
+    });
+
+
     socket.on('join_game', (username) => {
+        // --- NOUVEAU : Gestion de la reconnexion (ex: page rafraîchie) ---
+        const existingId = Object.keys(gameState.players).find(id => gameState.players[id].username === username);
+        if (existingId) {
+            console.log(`[PLAYER] ${username} reconnected (new id: ${socket.id})`);
+            // On transfère l'ancien état vers le nouveau socket
+            gameState.players[socket.id] = gameState.players[existingId];
+            gameState.players[socket.id].id = socket.id;
+            // Si l'ancien ID était différent, on le supprime (éviter les doublons)
+            if (existingId !== socket.id) delete gameState.players[existingId];
+
+            const player = gameState.players[socket.id];
+            socket.emit('joined_success', { username: player.username, team: player.team, gameInProgress: gameState.isStarted });
+            
+            // On lui renvoie sa main immédiatement s'il en a une
+            if (player.hand.length > 0) {
+                socket.emit('your_hand', player.hand);
+            }
+            return;
+        }
+
         console.log(`[PLAYER] ${username} joined (${socket.id})`);
 
         // Assign to team with fewer players for balance
@@ -602,6 +632,7 @@ io.on('connection', (socket) => {
             lastPlayedColor: null,
             consecutiveColorCount: 0
         };
+
 
         // Notify the main screen (projector)
         socket.broadcast.emit('player_joined', { id: socket.id, username, team, isAI: false });

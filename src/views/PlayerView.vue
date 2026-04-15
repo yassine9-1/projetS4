@@ -214,9 +214,12 @@ function joinGame() {
   if (val.length > 0) {
     username.value = val
     usernameInput.value = ''
+    // Sauvegarder dans localStorage pour la reconnexion automatique
+    localStorage.setItem('neon_uno_username', val)
     socket.emit('join_game', username.value)
   }
 }
+
 
 function sayUno() {
   socket.emit('say_uno')
@@ -567,7 +570,15 @@ function scrollToFocused() {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  
+  // Reconnexion automatique si un pseudo est déjà enregistré
+  const savedUsername = localStorage.getItem('neon_uno_username')
+  if (savedUsername) {
+    username.value = savedUsername
+    socket.emit('join_game', savedUsername)
+  }
 })
+
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
