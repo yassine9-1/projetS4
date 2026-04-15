@@ -534,13 +534,18 @@ socket.on('game_over', (data) => {
   if (virusInterval) clearInterval(virusInterval)
   isFrozen.value = true
   screen.value = 'gameover'
-  const color = data.team === 'blue' ? '#3498DB' : '#F572F7'
-  gameOverColor.value = color
-  if (data.winner === username.value) {
-    gameOverText.value = 'VOUS AVEZ GAGNÉ !'
+  
+  if (data.forced) {
+    gameOverText.value = 'PARTIE TERMINÉE'
+    gameOverColor.value = '#aaa'
+  } else if (data.team === myTeam.value) {
+    gameOverText.value = 'VICTOIRE !'
+    gameOverColor.value = '#2ECC71' // Vert néon pour la victoire
   } else {
-    gameOverText.value = `VICTOIRE DE\n${data.winner}`
+    gameOverText.value = 'DÉFAITE...'
+    gameOverColor.value = '#E74C3C' // Rouge pour la défaite
   }
+
   if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300])
 })
 
